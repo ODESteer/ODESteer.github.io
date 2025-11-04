@@ -1,0 +1,104 @@
+---
+// Hero.astro - Displays the main hero section with title, description and CTA
+---
+<section id="hero" class="content-section hero-section">
+  <div class="title-wrapper">
+    <img src="/icon.png" alt="RAGEN Icon" class="title-icon" />
+    <h1 class="main-title" id="animated-title">ODESteer</h1>
+  </div>
+  <p class="subtitle animated-subtitle-line" id="animated-subtitle-line1">A Unified ODE-Based Steering Framework for</p>
+  <p class="subtitle animated-subtitle-line" id="animated-subtitle-line2">LLM Alignment</p>
+  <p class="description">
+    <span class="desc-light">Interpreting Activation Steering as</span> <strong class="desc-dark">ODE Dynamics</strong><br>
+    <span class="desc-light">Guided by</span> <strong class="desc-dark">Barrier Functions</strong> <span class="desc-light">to Steer Directions <em>Adaptively</em></span>
+  <br>
+  <!-- <a href="https://vagen-ai.github.io/" class="vagen-announcement">
+    Announcing <b>VAGEN</b> for VLM Agents >
+  </a> -->
+</p>
+  <div class="resources-section">
+    <div class="resources-buttons">
+      <a href="#" class="resource-button">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="resource-icon" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <span>Paper</span>
+      </a>
+      <a href="#" class="resource-button">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 26 26" class="resource-icon github-icon" aria-hidden="true">
+          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"></path>
+        </svg>
+        <span>Code</span>
+      </a>
+      <a href="#" class="resource-button">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="resource-icon x-icon" aria-hidden="true">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path>
+        </svg>
+        <span>tl;dr</span>
+      </a>
+      <a href="#" class="resource-button">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="resource-icon demo-icon" aria-hidden="true">
+          <path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"></path>
+          <path d="M12 4v1m6 1.5l-.7.7M20 12h-1m-1.5 6l-.7-.7M12 19v1m-6-1.5l.7-.7M4 12h1m1.5-6l.7.7"></path>
+        </svg>
+        <span>Demo</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="diagram-placeholder">
+    <img src="/main.png" alt="Diagram placeholder" style="max-width: 85%;"/>
+    <p style="text-align: center; color: #888; margin-top: 0rem;">Comparison between <strong>ODESteer</strong> and existing activation addition methods.</p>
+  </div>
+  
+  <div class="authors-section">
+    <!-- <h3 class="section-title">Authors</h3> -->
+    <div class="authors-list">
+        <p>
+          <a href="https://github.com/ZhaoHongjue">Hongjue Zhao</a><sup class="affiliation-marker">*1</sup>,
+          <a href="https://haosensun.github.io/">Haosen Sun</a><sup class="affiliation-marker">*2</sup>,
+          <a href="https://scholar.google.com/citations?hl=en&user=tu5GG9sAAAAJ">Jiangtao Kong</a><sup class="affiliation-marker">3</sup>,
+          <a href="https://github.com/V-Enzo">Xiaochang Li</a><sup class="affiliation-marker">3</sup>,
+          <a href="https://qinengwang-aiden.github.io/">Qineng Wang</a><sup class="affiliation-marker">2</sup>,
+          <a href="https://liweijiang.github.io/">Liwei Jiang</a><sup class="affiliation-marker">4</sup>,
+        </p>
+        <p>
+          <a href="http://zhulab.ece.northwestern.edu/index.html">Qi Zhu</a><sup class="affiliation-marker">2</sup>,
+          <a href="https://abdelzaher.cs.illinois.edu/">Tarek F. Abdelzaher</a><sup class="affiliation-marker">1</sup>,
+          <a href="https://homes.cs.washington.edu/~yejin/">Yejin Choi</a><sup class="affiliation-marker">5</sup>,
+          <a href="https://limanling.github.io/">Manling Li</a><sup class="affiliation-marker">2†</sup>,
+          <a href="https://huajieshao.github.io/">Huajie Shao</a><sup class="affiliation-marker">3†</sup>
+        </p>
+        <p class="equal-contribution" style="font-style: italic;">
+          <sup class="affiliation-marker">*</sup> Equal Contribution &nbsp;&nbsp;
+          <sup class="affiliation-marker">†</sup> Equal Advising
+        </p>
+        <p class="affiliations">
+          <sup class="affiliation-marker">1</sup> University of Illinois Urbana-Champaign &nbsp;&nbsp;
+          <sup class="affiliation-marker">2</sup> Northwestern University &nbsp;&nbsp;
+          <sup class="affiliation-marker">3</sup> William & Mary &nbsp;&nbsp;
+          <br>
+          <sup class="affiliation-marker">4</sup> University of Washington &nbsp;&nbsp;
+          <sup class="affiliation-marker">5</sup> Stanford University &nbsp;&nbsp;
+        </p>
+    </div>
+  </div>
+</section> 
+
+<style>
+  .vagen-announcement {
+    color: #2a2f6c;
+    font-size: 0.9em;
+    text-decoration: none;
+    transition: color 0.3s ease;
+  }
+
+  .vagen-announcement:hover {
+    color: #4b4f8f;
+    text-decoration: none;
+  }
+</style> 

@@ -1,0 +1,1746 @@
+---
+// Algorithm.astro - Displays information about the BODES algorithm framework
+// import { Fragment } from 'astro/jsx-runtime'
+
+// Predefined math formula variables
+const mathFormulas = {
+  rawActivation: "$\\boldsymbol{a}$",
+  updatedActivation: "$\\tilde{\\boldsymbol{a}}$",
+  a0: "$\\boldsymbol{a}(0)$",
+  aT: "$\\boldsymbol{a}(T)$",
+  setC: "$\\mathcal{C}$",
+  timeStep: "$T$",
+  velocityField: "$\\boldsymbol{v}(\\boldsymbol{a})$",
+  barrierFunction: "$h(\\boldsymbol{a})$",
+  barriercdot: "$h(\\cdot)$",
+  barrierderive: "$$\\nabla h(\\boldsymbol{a})^\\top \\cdot \\boldsymbol{v}(\\boldsymbol{a}) \\geq 0, \\quad \\forall \\boldsymbol{a} \\in \\mathcal{A},$$",
+  barrierFuncDefn: "$h(\\boldsymbol{a}): \\mathbb{R}^d \\rightarrow \\mathbb{R}$",
+  goodRegion: "$\\mathcal{C}=\\{ \\boldsymbol{a} \\in \\mathbb{R}^d \\mid h(\\boldsymbol{a}) > 0 \\}$",
+  activationAddition: "$$\\tilde{\\boldsymbol{a}} = \\boldsymbol{a} + T \\cdot \\boldsymbol{v}(\\boldsymbol{a}),$$",
+  inlineode: "$\\dot{\\boldsymbol{a}} = \\boldsymbol{v}(\\boldsymbol{a})$",
+  ode: "$$\\dot{\\boldsymbol{a}} = \\boldsymbol{v}(\\boldsymbol{a}) \\quad \\Longrightarrow \\quad \\boldsymbol{a}(T) = \\boldsymbol{a}(0) + T \\cdot \\boldsymbol{v}(\\boldsymbol{a}(0)),$$",
+  ourBarrierFunction: "$$h(\\boldsymbol{a}) = \\log r(\\boldsymbol{a}) = \\log \\frac{p_+(\\boldsymbol{a})}{p_-(\\boldsymbol{a})} = \\boldsymbol{w}^\\top \\boldsymbol{\\phi}(\\boldsymbol{a}) + b,$$",
+  w: "$\\boldsymbol{w}$",
+  phi: "$\\boldsymbol{\\phi}(\\cdot)$",
+  b: "$b$",
+  ourODE: "$$\\dot{\\boldsymbol{a}} = \\frac{\\nabla h(\\boldsymbol{a})}{\\|{\\nabla h(\\boldsymbol{a})}\\|} = \\frac{\\boldsymbol{J}_{\\boldsymbol{\\phi}}(\\boldsymbol{a})^\\top \\boldsymbol{w}}{\\|{\\boldsymbol{J}_{\\boldsymbol{\\phi}}(\\boldsymbol{a})^\\top \\boldsymbol{w}}\\|},$$",
+  Jphi: "$\\boldsymbol{J}_{\\boldsymbol{\\phi}}(\\boldsymbol{a})$",
+  solveode: "$$\\tilde{\\boldsymbol{a}} = \\boldsymbol{a}(T) = \\mathrm{ODESolve}(\\boldsymbol{v}(\\cdot), \\boldsymbol{a}, [0, T]).$$",
+}
+
+// @ts-ignore
+---
+<section id="starpo" class="content-section">
+  <div class="section-container">
+    <h2 class="section-title" id="tldr">TL;DR</h2>
+
+    <div class="abstract-content">
+      <p>
+        <li>
+          We propose a <strong>unified theoretical framework for activation steering</strong> in LLM alignment via ordinary differential equations (ODEs), interpreting the <em>activation addition</em> as numerically solving an ODE and the steering direction identification as defining a barrier function from control theory.
+        </li>
+        <li>
+          Building on this framework, we introduce <strong>ODESteer</strong>, a novel method that performs <em>multi-step and adaptive</em> activation updates by solving an ODE guided by the barrier function.
+        </li>
+        <li>
+          Compared to SOTA activation steering methods, <strong>ODESteer</strong> achieves consistent empirical improvements on diverse LLM alignment benchmarks, a notable <strong>5.7%</strong> improvement over TruthfulQA, <strong>2.5%</strong> over UltraFeedback, and <strong>2.4%</strong> over RealToxicityPrompts.
+        </li>
+      </p>
+    </div>
+
+    <h2 class="section-title" id="framework" style="margin-top: 5rem;">Unified ODE-Based Steering Framework</h2>
+    
+    <!-- MathJax CDN -->
+    <script is:inline>
+      window.MathJax = {
+        tex: {
+          inlineMath: [['\\(', '\\)'], ['$', '$']],
+          displayMath: [['\\[', '\\]'], ['$$', '$$']],
+          processEscapes: true
+        },
+        svg: {
+          fontCache: 'global'
+        }
+      };
+    </script>
+    <script is:inline defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script is:inline src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script is:inline id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <!-- Move algorithm flowchart above the image -->
+    <!-- <div class="algorithm-visualization">
+      <div class="visual-container">
+        <div class="flow-step" id="step-initial">
+          <div class="step-icon">📋</div>
+          <div class="step-content">
+            <h4>Initial State</h4>
+          </div>
+        </div>
+        <div class="flow-arrow-wrapper">
+          <svg width="50" height="20" viewBox="0 0 50 20" class="flow-arrow">
+            <defs>
+              <marker id="arrow-marker" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#2a2f6c" />
+              </marker>
+            </defs>
+            <path d="M 0 10 L 40 10" stroke="#2a2f6c" stroke-width="2" marker-end="url(#arrow-marker)" />
+          </svg>
+        </div>
+        <div class="flow-step" id="step-reasoning">
+          <div class="step-icon">🧠</div>
+          <div class="step-content">
+            <h4>Reasoning</h4>
+          </div>
+        </div>
+        <div class="flow-arrow-wrapper">
+          <svg width="50" height="20" viewBox="0 0 50 20" class="flow-arrow">
+            <path d="M 0 10 L 40 10" stroke="#2a2f6c" stroke-width="2" marker-end="url(#arrow-marker)" />
+          </svg>
+        </div>
+        <div class="flow-step" id="step-action">
+          <div class="step-icon">⚡</div>
+          <div class="step-content">
+            <h4>Action</h4>
+          </div>
+        </div>
+        <div class="flow-arrow-wrapper">
+          <svg width="50" height="20" viewBox="0 0 50 20" class="flow-arrow">
+            <path d="M 0 10 L 40 10" stroke="#2a2f6c" stroke-width="2" marker-end="url(#arrow-marker)" />
+          </svg>
+        </div>
+        <div class="flow-step" id="step-reward">
+          <div class="step-icon">🏆</div>
+          <div class="step-content">
+            <h4>Reward</h4>
+          </div>
+        </div>
+
+        <div class="repeat-arrow-container">
+          <svg class="repeat-arrow" width="100%" height="50" viewBox="0 0 500 50">
+            <line x1="-50" y1="5" x2="-50" y2="30" stroke="#2a2f6c" stroke-width="2"/>
+            <line x1="-50" y1="30" x2="560" y2="30" stroke="#2a2f6c" stroke-width="2"/>
+            <line x1="560" y1="5" x2="560" y2="30" stroke="#2a2f6c" stroke-width="2"/>
+            <polygon points="-55,15 -50,5 -45,15" fill="#2a2f6c"/>
+            <text x="250" y="20" text-anchor="middle" fill="#2a2f6c" font-size="15" font-weight="700">Repeat</text>
+          </svg>
+        </div>
+      </div>
+    </div> -->
+    
+    <!-- <div class="diagram-placeholder diagram-card">
+      <img src="/Algorithm.png" alt="BODES Framework" style="width: 100%; height: auto;"/>
+    </div> -->
+    <!-- <p style="text-align: center; color: #888; margin-top: 1rem;">Activation evolution is modeled as an ODE guided by a barrier function <span set:html="\\(h(\\mathbf{a})\\)" />, estimated via logistic regression as a nonlinear log-density ratio. The normalized gradient of <span set:html="\\(h(\\mathbf{a})\\)" /> defines the ODE that steers activations toward desired states.</p> -->
+    
+    <div class="spacer" style="height: 2rem;"></div>
+
+    <!-- <div class="algorithm-components"> -->
+      <!-- <h3 class="components-title">The framework consists of two key components:</h3> -->
+      
+      <div class="component-card mdp-card" id="mdp-card">
+        <div class="component-header">
+          <h3 class="component-title">Activation Addition as Euler Discretization of ODEs</h3>
+          <div class="expand-icon">+</div>
+        </div>
+        <!-- <div class="component-content" id="mdp-content">
+          <p>
+            <li>
+              Regular activation addition
+              <div set:html={mathFormulas.activationAddition}></div>
+              where <span set:html={mathFormulas.rawActivation}></span> is the raw activation, 
+              <span set:html={mathFormulas.updatedActivation}></span> is the steered activation, 
+              <span set:html={mathFormulas.timeStep}></span> determines the steering strength, 
+              and <span set:html={mathFormulas.velocityField}></span> is the steering vector.
+            </li>
+            <div class="spacer" style="height: 0.8rem;"></div>
+            <li>
+              Consider the ODE <span set:html={mathFormulas.inlineode}></span>, its Euler discretization can be written as
+              <div set:html={mathFormulas.ode}></div>
+            </li>
+            <li>
+              When we view <span set:html={mathFormulas.a0}></span> as the <span set:html={mathFormulas.rawActivation}></span> 
+              and <span set:html={mathFormulas.aT}></span> as the <span set:html={mathFormulas.updatedActivation}></span>, 
+              <strong>activation addition is equivalent to the Euler discretization of the ODE.</strong>
+            </li>
+          </p>
+        </div> -->
+        <div class="component-content" id="mdp-content">
+          <p>
+            Regular activation addition
+            <div class="formula-highlight" set:html={mathFormulas.activationAddition}></div>
+            can be interpreted as a single-step Euler discretization of the ODE
+            <div class="formula-highlight" set:html={mathFormulas.ode}></div>
+          </p>
+          <div class="conclusion-highlight">
+            Thus, <strong>activation addition ≈ Euler discretization of activation dynamics</strong>.
+          </div>
+      </div>
+      </div>
+      
+      <div class="component-card starpo-card" id="starpo-card">
+        <div class="component-header">
+          <h3 class="component-title">Barrier Functions for Identifying Steering Directions</h3>
+          <div class="expand-icon">+</div>
+        </div>
+        <div class="component-content" id="starpo-content">
+          <p>
+            Barrier functions guide activations to <strong>move toward and stay within a desired region</strong>.
+            For <span set:html={mathFormulas.inlineode}></span>, if
+            <div class="formula-highlight" set:html={mathFormulas.barrierderive}></div>
+            then <span set:html={mathFormulas.rawActivation}></span> stays in the region <span set:html={mathFormulas.goodRegion}></span>.
+          </p>
+          <div class="spacer" style="height: 0.5rem;"></div>
+          <p>
+            Based on <span set:html={mathFormulas.barriercdot}></span>, we unify two types of steering:
+          </p>
+            <div class="spacer" style="height: 0.5rem;"></div>
+            <table>
+              <caption class="sr-only">
+                Methods and barrier functions by category
+              </caption>
+          
+              <thead>
+                <tr>
+                  <th scope="col">Category</th>
+                  <th scope="col">Method</th>
+                  <th scope="col">Barrier Function <em>h(a)</em></th>
+                </tr>
+              </thead>
+          
+              <tbody>
+                <tr>
+                  <th scope="rowgroup" rowspan="2">Input Reading</th>
+                  <td>Difference-in-Means</td>
+                  <td>Log-density ratio (Gaussian assumption)</td>
+                </tr>
+                <tr>
+                  <td>Linear Probes</td>
+                  <td>Log-density ratio (logistic regression)</td>
+                </tr>
+                <tr>
+                  <th scope="row">Output Optimization</th>
+                  <td>&ndash;</td>
+                  <td>Scoring function with threshold</td>
+                </tr>
+              </tbody>
+            </table>
+          </p>
+        </div>
+      </div>
+
+      
+      <!-- Section: ODESteer -->
+      <h2 class="section-title" id="odesteer" style="margin-top: 5rem;">ODESteer: Multi-Step and Adaptive Activation Steering</h2>
+      <div class="spacer" style="height: 2rem;"></div>
+
+      <!-- Component: Defining Barrier Function -->
+      <div class="component-card starpo-card" id="barrier-card">
+        <div class="component-header">
+          <h3 class="component-title">Defining Barrier Function</h3>
+          <div class="expand-icon">+</div>
+        </div>
+        <div class="component-content" id="barrier-content">
+          <p>
+            We define
+            <div class="formula-highlight" set:html={mathFormulas.ourBarrierFunction}></div>
+            where <span set:html={mathFormulas.phi}></span> is a nonlinear feature map.
+          </p>
+          <div class="spacer" style="height: 0.5rem;"></div>
+          <ul class="method-list">
+            <li>Use <strong>polynomial count sketch</strong> for efficient random polynomial features.</li>
+            <li>Use <strong>logistic regression</strong> to estimate <span set:html={mathFormulas.w}></span>, <span set:html={mathFormulas.b}></span> with scikit-learn.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Component: ODESteer -->
+      <div class="component-card starpo-card" id="ode-card">
+        <div class="component-header">
+          <h3 class="component-title">Constructing the Steering ODE</h3>
+          <div class="expand-icon">+</div>
+        </div>
+        <div class="component-content" id="ode-content">
+          <p>
+            To satisfy the barrier condition, we define
+            <div class="formula-highlight" set:html={mathFormulas.ourODE}></div>
+            where <span set:html={mathFormulas.Jphi}></span> is the Jacobian of <span set:html={mathFormulas.phi}></span>.
+          </p>
+          <div class="spacer" style="height: 0.5rem;"></div>
+          <p>
+            The steered activation is obtained by solving
+            <div class="formula-highlight" set:html={mathFormulas.solveode}></div>
+          </p>
+        </div>
+      </div>
+
+      <!-- Component: Key Advantages -->
+      <div class="component-card starpo-card" id="advantages-card">
+        <div class="component-header">
+          <h3 class="component-title">Key Advantages</h3>
+          <div class="expand-icon">+</div>
+        </div>
+        <div class="component-content advantages-content" id="advantages-content">
+          <ul class="advantages-list">
+            <li>
+              <strong>Feedback Control:</strong> The barrier function's gradient depends on current activation, enabling adaptive steering.
+            </li>
+            <li>
+              <strong>Multi-Step Precision:</strong> Replaces the single-step Euler approximation with a high-accuracy ODE solver.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Section: Experiments -->
+      <h2 class="section-title" id="experiments" style="margin-top: 5rem;">Experiments</h2>
+      <div class="spacer" style="height: 2rem;"></div>
+
+      <div class="component-card starpo-card" id="experiments-card">
+        <div class="component-header">
+          <h3 class="component-title">Experimental Results across Multiple LLMs and Benchmarks</h3>
+          <div class="expand-icon">+</div>
+        </div>
+        <div class="component-content" id="experiments-content">
+          <div class="table-wrap">
+            <table class="metrics">
+          
+              <thead>
+                <tr class="grouphead">
+                  <th scope="col" colspan="2" class="group"></th>
+                  <th scope="col" colspan="3" class="group">Ultrafeedback</th>
+                  <th scope="col" colspan="3" class="group">TruthfulQA</th>
+                  <th scope="col" colspan="3" class="group">Real Toxicity Prompts</th>
+                </tr>
+                <tr>
+                  <th scope="col">Method</th>
+                  <th scope="col">Model</th>
+                  <th scope="col" class="primary">Win (%) ↑</th>
+                  <th scope="col">RMmean ↑</th>
+                  <th scope="col">RMP90 ↑</th>
+                  <th scope="col" class="primary">T×I (%) ↑</th>
+                  <th scope="col">True (%) ↑</th>
+                  <th scope="col">Info (%) ↑</th>
+                  <th scope="col" class="primary">Toxic ↓</th>
+                  <th scope="col">PPL ↓</th>
+                  <th scope="col">Dist-2 ↑</th>
+                </tr>
+                
+              </thead>
+          
+              <tbody aria-label="Falcon-7B">
+                <!-- FALCON-7B -->
+                <tr>
+                  <td>Original</td>
+                  <td rowspan="10" class="model">Falcon-7B</td>
+                  <td class="primary">50.0 <span class="sd">±0.000</span></td>
+                  <td>-15.298 <span class="sd">±0.194</span></td>
+                  <td>-5.465 <span class="sd">±0.628</span></td>
+                  <td class="primary">29.0 <span class="sd">±0.220</span></td>
+                  <td>30.2 <span class="sd">±0.153</span></td>
+                  <td>96.0 <span class="sd">±0.462</span></td>
+                  <td class="primary">0.257 <span class="sd">±0.007</span></td>
+                  <td>15.980 <span class="sd">±0.360</span></td>
+                  <td>0.948 <span class="sd">±0.003</span></td>
+                </tr>
+          
+                <tr>
+                  <td>RepE</td>
+                  <td class="primary">50.1 <span class="sd">±0.014</span></td>
+                  <td>-15.354 <span class="sd">±0.120</span></td>
+                  <td>-5.337 <span class="sd">±0.501</span></td>
+                  <td class="primary">24.4 <span class="sd">±0.395</span></td>
+                  <td>25.7 <span class="sd">±0.550</span></td>
+                  <td>95.1 <span class="sd">±0.602</span></td>
+                  <td class="primary">0.246 <span class="sd">±0.004</span></td>
+                  <td>15.440 <span class="sd">±0.260</span></td>
+                  <td>0.940 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>ITI</td>
+                  <td class="primary">50.5 <span class="sd">±0.013</span></td>
+                  <td>-15.291 <span class="sd">±0.153</span></td>
+                  <td><u>-4.704 <span class="sd">±0.417</span></u></td>
+                  <td class="primary">34.7 <span class="sd">±0.713</span></td>
+                  <td>36.0 <span class="sd">±0.608</span></td>
+                  <td>96.4 <span class="sd">±0.493</span></td>
+                  <td class="primary">0.243 <span class="sd">±0.010</span></td>
+                  <td>15.880 <span class="sd">±0.690</span></td>
+                  <td>0.935 <span class="sd">±0.006</span></td>
+                </tr>
+          
+                <tr>
+                  <td>CAA</td>
+                  <td class="primary"><u>52.8 <span class="sd">±0.011</span></u></td>
+                  <td>-14.998 <span class="sd">±0.157</span></td>
+                  <td>-5.100 <span class="sd">±0.481</span></td>
+                  <td class="primary">35.0 <span class="sd">±0.390</span></td>
+                  <td>36.4 <span class="sd">±0.321</span></td>
+                  <td>96.3 <span class="sd">±0.252</span></td>
+                  <td class="primary">0.244 <span class="sd">±0.003</span></td>
+                  <td>15.920 <span class="sd">±0.530</span></td>
+                  <td>0.950 <span class="sd">±0.002</span></td>
+                </tr>
+          
+                <tr>
+                  <td>MiMiC</td>
+                  <td class="primary">47.8 <span class="sd">±0.016</span></td>
+                  <td>-15.469 <span class="sd">±0.092</span></td>
+                  <td>-5.333 <span class="sd">±0.250</span></td>
+                  <td class="primary"><u>37.2 <span class="sd">±0.712</span></u></td>
+                  <td><u>42.2 <span class="sd">±1.058</span></u></td>
+                  <td>88.0 <span class="sd">±1.385</span></td>
+                  <td class="primary">0.244 <span class="sd">±0.007</span></td>
+                  <td>15.780 <span class="sd">±0.640</span></td>
+                  <td>0.941 <span class="sd">±0.002</span></td>
+                </tr>
+          
+                <tr>
+                  <td>HPR</td>
+                  <td class="primary">49.4 <span class="sd">±0.012</span></td>
+                  <td>-15.605 <span class="sd">±0.234</span></td>
+                  <td>-5.654 <span class="sd">±0.842</span></td>
+                  <td class="primary">36.0 <span class="sd">±0.638</span></td>
+                  <td>38.9 <span class="sd">±0.351</span></td>
+                  <td>92.5 <span class="sd">±0.832</span></td>
+                  <td class="primary"><u>0.193 <span class="sd">±0.003</span></u></td>
+                  <td>83.500 <span class="sd">±37.80</span></td>
+                  <td>0.919 <span class="sd">±0.002</span></td>
+                </tr>
+          
+                <tr>
+                  <td>RE-Control</td>
+                  <td class="primary">51.4 <span class="sd">±0.004</span></td>
+                  <td>-15.014 <span class="sd">±0.123</span></td>
+                  <td>-4.980 <span class="sd">±0.159</span></td>
+                  <td class="primary">31.7 <span class="sd">±0.820</span></td>
+                  <td>33.0 <span class="sd">±0.850</span></td>
+                  <td>96.3 <span class="sd">±0.058</span></td>
+                  <td class="primary">0.219 <span class="sd">±0.006</span></td>
+                  <td>16.660 <span class="sd">±0.430</span></td>
+                  <td>0.941 <span class="sd">±0.007</span></td>
+                </tr>
+          
+                <tr>
+                  <td>Linear-AcT</td>
+                  <td class="primary">50.7 <span class="sd">±0.009</span></td>
+                  <td>-15.125 <span class="sd">±0.158</span></td>
+                  <td>-5.114 <span class="sd">±0.352</span></td>
+                  <td class="primary">35.1 <span class="sd">±0.336</span></td>
+                  <td>36.7 <span class="sd">±0.458</span></td>
+                  <td>95.7 <span class="sd">±0.600</span></td>
+                  <td class="primary">0.248 <span class="sd">±0.002</span></td>
+                  <td>16.690 <span class="sd">±0.700</span></td>
+                  <td>0.949 <span class="sd">±0.002</span></td>
+                </tr>
+          
+                <tr>
+                  <td>TruthFlow</td>
+                  <td class="primary">50.7 <span class="sd">±0.015</span></td>
+                  <td><u>-14.720 <span class="sd">±0.281</span></u></td>
+                  <td>-4.154 <span class="sd">±0.599</span></td>
+                  <td class="primary">34.1 <span class="sd">±0.929</span></td>
+                  <td>37.5 <span class="sd">±1.364</span></td>
+                  <td>90.7 <span class="sd">±0.929</span></td>
+                  <td class="primary">0.277 <span class="sd">±0.005</span></td>
+                  <td>31.550 <span class="sd">±7.960</span></td>
+                  <td>0.910 <span class="sd">±0.005</span></td>
+                </tr>
+          
+                <tr class="ours">
+                  <td>Ours</td>
+                  <td class="primary"><strong>56.3 <span class="sd">±0.018</span></strong></td>
+                  <td><strong>-14.203 <span class="sd">±0.143</span></strong></td>
+                  <td><strong>-4.483 <span class="sd">±0.255</span></strong></td>
+                  <td class="primary"><strong>42.2 <span class="sd">±0.115</span></strong></td>
+                  <td><strong>44.4 <span class="sd">±0.436</span></strong></td>
+                  <td>94.9 <span class="sd">±0.907</span></td>
+                  <td class="primary"><strong>0.188 <span class="sd">±0.006</span></strong></td>
+                  <td>16.330 <span class="sd">±0.300</span></td>
+                  <td>0.944 <span class="sd">±0.005</span></td>
+                </tr>
+              </tbody>
+          
+              <tbody aria-label="Mistral-7B">
+                <!-- MISTRAL-7B -->
+                <tr>
+                  <td>Original</td>
+                  <td rowspan="10" class="model">Mistral-7B</td>
+                  <td class="primary">50.0 <span class="sd">±0.000</span></td>
+                  <td>-10.001 <span class="sd">±0.179</span></td>
+                  <td>-0.379 <span class="sd">±0.378</span></td>
+                  <td class="primary">39.3 <span class="sd">±0.568</span></td>
+                  <td>41.7 <span class="sd">±0.907</span></td>
+                  <td>94.3 <span class="sd">±0.692</span></td>
+                  <td class="primary">0.215 <span class="sd">±0.000</span></td>
+                  <td>18.540 <span class="sd">±0.280</span></td>
+                  <td>0.991 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>RepE</td>
+                  <td class="primary">44.6 <span class="sd">±0.009</span></td>
+                  <td>-10.756 <span class="sd">±0.338</span></td>
+                  <td>-0.508 <span class="sd">±0.324</span></td>
+                  <td class="primary">41.3 <span class="sd">±0.317</span></td>
+                  <td>47.0 <span class="sd">±0.755</span></td>
+                  <td>87.9 <span class="sd">±1.388</span></td>
+                  <td class="primary">0.225 <span class="sd">±0.002</span></td>
+                  <td>74.990 <span class="sd">±1.560</span></td>
+                  <td>0.969 <span class="sd">±0.004</span></td>
+                </tr>
+          
+                <tr>
+                  <td>ITI</td>
+                  <td class="primary">51.8 <span class="sd">±0.001</span></td>
+                  <td>-9.718 <span class="sd">±0.124</span></td>
+                  <td>0.239 <span class="sd">±0.382</span></td>
+                  <td class="primary">46.4 <span class="sd">±1.249</span></td>
+                  <td>49.4 <span class="sd">±1.816</span></td>
+                  <td>93.9 <span class="sd">±0.986</span></td>
+                  <td class="primary">0.165 <span class="sd">±0.007</span></td>
+                  <td>18.630 <span class="sd">±0.760</span></td>
+                  <td>0.989 <span class="sd">±0.002</span></td>
+                </tr>
+          
+                <tr>
+                  <td>CAA</td>
+                  <td class="primary">53.4 <span class="sd">±0.015</span></td>
+                  <td>-9.360 <span class="sd">±0.206</span></td>
+                  <td><u>0.500 <span class="sd">±0.700</span></u></td>
+                  <td class="primary">45.9 <span class="sd">±0.796</span></td>
+                  <td>49.0 <span class="sd">±1.135</span></td>
+                  <td>93.8 <span class="sd">±0.953</span></td>
+                  <td class="primary">0.190 <span class="sd">±0.002</span></td>
+                  <td>18.740 <span class="sd">±0.120</span></td>
+                  <td>0.991 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>MiMiC</td>
+                  <td class="primary">51.0 <span class="sd">±0.015</span></td>
+                  <td>-10.059 <span class="sd">±0.085</span></td>
+                  <td>-0.442 <span class="sd">±0.477</span></td>
+                  <td class="primary">45.5 <span class="sd">±2.024</span></td>
+                  <td>50.4 <span class="sd">±2.080</span></td>
+                  <td>90.3 <span class="sd">±0.750</span></td>
+                  <td class="primary">0.195 <span class="sd">±0.003</span></td>
+                  <td>18.970 <span class="sd">±0.260</span></td>
+                  <td>0.991 <span class="sd">±0.002</span></td>
+                </tr>
+          
+                <tr>
+                  <td>HPR</td>
+                  <td class="primary">52.3 <span class="sd">±0.017</span></td>
+                  <td><u>-9.310 <span class="sd">±0.271</span></u></td>
+                  <td>0.465 <span class="sd">±0.298</span></td>
+                  <td class="primary"><u>50.4 <span class="sd">±0.265</span></u></td>
+                  <td>56.4 <span class="sd">±0.404</span></td>
+                  <td>89.4 <span class="sd">±1.043</span></td>
+                  <td class="primary"><u>0.127 <span class="sd">±0.007</span></u></td>
+                  <td>36.310 <span class="sd">±1.810</span></td>
+                  <td>0.975 <span class="sd">±0.002</span></td>
+                </tr>
+          
+                <tr>
+                  <td>RE-Control</td>
+                  <td class="primary">48.6 <span class="sd">±0.027</span></td>
+                  <td>-10.215 <span class="sd">±0.162</span></td>
+                  <td>0.411 <span class="sd">±0.335</span></td>
+                  <td class="primary">40.0 <span class="sd">±0.872</span></td>
+                  <td>42.4 <span class="sd">±0.929</span></td>
+                  <td>94.3 <span class="sd">±1.456</span></td>
+                  <td class="primary">0.130 <span class="sd">±0.011</span></td>
+                  <td>19.950 <span class="sd">±0.760</span></td>
+                  <td>0.989 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>Linear-AcT</td>
+                  <td class="primary"><u>54.6 <span class="sd">±0.012</span></u></td>
+                  <td>-9.391 <span class="sd">±0.306</span></td>
+                  <td>0.329 <span class="sd">±0.604</span></td>
+                  <td class="primary">46.0 <span class="sd">±0.323</span></td>
+                  <td>49.2 <span class="sd">±0.519</span></td>
+                  <td>93.5 <span class="sd">±1.153</span></td>
+                  <td class="primary">0.189 <span class="sd">±0.004</span></td>
+                  <td>19.040 <span class="sd">±0.170</span></td>
+                  <td>0.991 <span class="sd">±0.000</span></td>
+                </tr>
+          
+                <tr>
+                  <td>TruthFlow</td>
+                  <td class="primary">48.2 <span class="sd">±0.027</span></td>
+                  <td>-10.438 <span class="sd">±0.232</span></td>
+                  <td>0.415 <span class="sd">±0.266</span></td>
+                  <td class="primary">49.5 <span class="sd">±0.067</span></td>
+                  <td><u>58.3 <span class="sd">±0.305</span></u></td>
+                  <td>84.8 <span class="sd">±0.556</span></td>
+                  <td class="primary">0.203 <span class="sd">±0.009</span></td>
+                  <td>37.210 <span class="sd">±0.160</span></td>
+                  <td>0.991 <span class="sd">±0.002</span></td>
+                </tr>
+          
+                <tr class="ours">
+                  <td>Ours</td>
+                  <td class="primary"><strong>56.1 <span class="sd">±0.028</span></strong></td>
+                  <td><strong>-8.863 <span class="sd">±0.479</span></strong></td>
+                  <td><strong>0.853 <span class="sd">±0.966</span></strong></td>
+                  <td class="primary"><strong>59.9 <span class="sd">±0.237</span></strong></td>
+                  <td><strong>65.2 <span class="sd">±0.404</span></strong></td>
+                  <td>92.0 <span class="sd">±0.901</span></td>
+                  <td class="primary"><strong>0.109 <span class="sd">±0.006</span></strong></td>
+                  <td>21.090 <span class="sd">±0.480</span></td>
+                  <td>0.993 <span class="sd">±0.001</span></td>
+                </tr>
+              </tbody>
+          
+              <tbody aria-label="LLaMA3.1-8B">
+                <!-- LLAMA3.1-8B -->
+                <tr>
+                  <td>Original</td>
+                  <td rowspan="10" class="model">LLaMA3.1-8B</td>
+                  <td class="primary">50.0 <span class="sd">±0.000</span></td>
+                  <td>-15.072 <span class="sd">±0.076</span></td>
+                  <td>-4.993 <span class="sd">±0.151</span></td>
+                  <td class="primary">45.0 <span class="sd">±0.975</span></td>
+                  <td>46.2 <span class="sd">±1.050</span></td>
+                  <td>97.4 <span class="sd">±0.153</span></td>
+                  <td class="primary">0.226 <span class="sd">±0.009</span></td>
+                  <td>19.130 <span class="sd">±0.780</span></td>
+                  <td>0.991 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>RepE</td>
+                  <td class="primary">43.6 <span class="sd">±0.019</span></td>
+                  <td>-16.530 <span class="sd">±0.299</span></td>
+                  <td>-6.395 <span class="sd">±0.965</span></td>
+                  <td class="primary">39.5 <span class="sd">±1.392</span></td>
+                  <td>42.1 <span class="sd">±1.832</span></td>
+                  <td>93.9 <span class="sd">±0.838</span></td>
+                  <td class="primary">0.187 <span class="sd">±0.006</span></td>
+                  <td>20.700 <span class="sd">±0.100</span></td>
+                  <td>0.991 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>ITI</td>
+                  <td class="primary">51.0 <span class="sd">±0.013</span></td>
+                  <td>-14.945 <span class="sd">±0.421</span></td>
+                  <td>-5.546 <span class="sd">±0.309</span></td>
+                  <td class="primary">54.4 <span class="sd">±0.336</span></td>
+                  <td>56.5 <span class="sd">±0.635</span></td>
+                  <td>96.3 <span class="sd">±0.602</span></td>
+                  <td class="primary">0.185 <span class="sd">±0.003</span></td>
+                  <td>19.110 <span class="sd">±0.650</span></td>
+                  <td>0.991 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>CAA</td>
+                  <td class="primary">53.8 <span class="sd">±0.012</span></td>
+                  <td>-14.545 <span class="sd">±0.230</span></td>
+                  <td>-4.076 <span class="sd">±0.468</span></td>
+                  <td class="primary">51.7 <span class="sd">±1.263</span></td>
+                  <td>53.2 <span class="sd">±1.299</span></td>
+                  <td>97.2 <span class="sd">±0.200</span></td>
+                  <td class="primary">0.203 <span class="sd">±0.008</span></td>
+                  <td>18.550 <span class="sd">±0.070</span></td>
+                  <td>0.991 <span class="sd">±0.002</span></td>
+                </tr>
+          
+                <tr>
+                  <td>MiMiC</td>
+                  <td class="primary">54.4 <span class="sd">±0.013</span></td>
+                  <td>-13.993 <span class="sd">±0.046</span></td>
+                  <td>-3.949 <span class="sd">±0.115</span></td>
+                  <td class="primary">53.9 <span class="sd">±0.462</span></td>
+                  <td>59.0 <span class="sd">±0.321</span></td>
+                  <td>91.4 <span class="sd">±0.288</span></td>
+                  <td class="primary">0.195 <span class="sd">±0.002</span></td>
+                  <td>18.910 <span class="sd">±0.850</span></td>
+                  <td>0.992 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>HPR</td>
+                  <td class="primary">55.0 <span class="sd">±0.026</span></td>
+                  <td>-13.581 <span class="sd">±0.226</span></td>
+                  <td>-3.748 <span class="sd">±0.322</span></td>
+                  <td class="primary"><u>57.0 <span class="sd">±0.671</span></u></td>
+                  <td><u>60.7 <span class="sd">±0.814</span></u></td>
+                  <td>94.0 <span class="sd">±0.200</span></td>
+                  <td class="primary"><u>0.155 <span class="sd">±0.001</span></u></td>
+                  <td>21.150 <span class="sd">±0.460</span></td>
+                  <td>0.993 <span class="sd">±0.000</span></td>
+                </tr>
+          
+                <tr>
+                  <td>RE-Control</td>
+                  <td class="primary">50.6 <span class="sd">±0.021</span></td>
+                  <td>-14.459 <span class="sd">±0.392</span></td>
+                  <td>-4.354 <span class="sd">±0.851</span></td>
+                  <td class="primary">47.0 <span class="sd">±1.299</span></td>
+                  <td>48.7 <span class="sd">±1.285</span></td>
+                  <td>96.5 <span class="sd">±0.550</span></td>
+                  <td class="primary">0.164 <span class="sd">±0.006</span></td>
+                  <td>19.540 <span class="sd">±0.790</span></td>
+                  <td>0.992 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>Linear-AcT</td>
+                  <td class="primary"><u>56.3 <span class="sd">±0.005</span></u></td>
+                  <td>-14.300 <span class="sd">±0.033</span></td>
+                  <td>-4.611 <span class="sd">±0.340</span></td>
+                  <td class="primary">52.4 <span class="sd">±0.968</span></td>
+                  <td>54.2 <span class="sd">±0.907</span></td>
+                  <td>96.6 <span class="sd">±0.208</span></td>
+                  <td class="primary">0.201 <span class="sd">±0.006</span></td>
+                  <td>18.880 <span class="sd">±0.110</span></td>
+                  <td>0.991 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>TruthFlow</td>
+                  <td class="primary">55.0 <span class="sd">±0.014</span></td>
+                  <td><u>-13.395 <span class="sd">±0.066</span></u></td>
+                  <td><u>-2.535 <span class="sd">±0.297</span></u></td>
+                  <td class="primary">51.8 <span class="sd">±0.634</span></td>
+                  <td>57.1 <span class="sd">±0.451</span></td>
+                  <td>90.7 <span class="sd">±0.814</span></td>
+                  <td class="primary">0.218 <span class="sd">±0.004</span></td>
+                  <td>23.090 <span class="sd">±0.410</span></td>
+                  <td>0.992 <span class="sd">±0.000</span></td>
+                </tr>
+          
+                <tr class="ours">
+                  <td>Ours</td>
+                  <td class="primary"><strong>58.2 <span class="sd">±0.025</span></strong></td>
+                  <td><strong>-13.509 <span class="sd">±0.383</span></strong></td>
+                  <td><strong>-3.361 <span class="sd">±0.239</span></strong></td>
+                  <td class="primary"><strong>63.2 <span class="sd">±0.823</span></strong></td>
+                  <td><strong>67.0 <span class="sd">±0.999</span></strong></td>
+                  <td>94.4 <span class="sd">±0.305</span></td>
+                  <td class="primary"><strong>0.116 <span class="sd">±0.006</span></strong></td>
+                  <td>20.950 <span class="sd">±0.090</span></td>
+                  <td>0.993 <span class="sd">±0.001</span></td>
+                </tr>
+              </tbody>
+          
+              <tbody aria-label="Qwen2.5-7B">
+                <!-- QWEN2.5-7B -->
+                <tr>
+                  <td>Original</td>
+                  <td rowspan="10" class="model">Qwen2.5-7B</td>
+                  <td class="primary">50.0 <span class="sd">±0.000</span></td>
+                  <td>-7.401 <span class="sd">±0.308</span></td>
+                  <td>2.942 <span class="sd">±0.364</span></td>
+                  <td class="primary">65.9 <span class="sd">±0.573</span></td>
+                  <td>77.4 <span class="sd">±1.738</span></td>
+                  <td>85.2 <span class="sd">±1.492</span></td>
+                  <td class="primary">0.194 <span class="sd">±0.001</span></td>
+                  <td>21.778 <span class="sd">±0.061</span></td>
+                  <td>0.992 <span class="sd">±0.000</span></td>
+                </tr>
+          
+                <tr>
+                  <td>RepE</td>
+                  <td class="primary">50.2 <span class="sd">±0.007</span></td>
+                  <td>-7.251 <span class="sd">±0.313</span></td>
+                  <td>3.025 <span class="sd">±0.265</span></td>
+                  <td class="primary">65.3 <span class="sd">±0.850</span></td>
+                  <td>76.8 <span class="sd">±1.723</span></td>
+                  <td>85.1 <span class="sd">±1.388</span></td>
+                  <td class="primary">0.212 <span class="sd">±0.011</span></td>
+                  <td>70.586 <span class="sd">±36.231</span></td>
+                  <td>0.961 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>ITI</td>
+                  <td class="primary">48.3 <span class="sd">±0.023</span></td>
+                  <td>-7.696 <span class="sd">±0.257</span></td>
+                  <td>2.574 <span class="sd">±0.329</span></td>
+                  <td class="primary">65.8 <span class="sd">±1.211</span></td>
+                  <td>77.5 <span class="sd">±0.721</span></td>
+                  <td>85.0 <span class="sd">±0.776</span></td>
+                  <td class="primary">0.168 <span class="sd">±0.005</span></td>
+                  <td>21.599 <span class="sd">±0.115</span></td>
+                  <td>0.984 <span class="sd">±0.000</span></td>
+                </tr>
+          
+                <tr>
+                  <td>CAA</td>
+                  <td class="primary">50.4 <span class="sd">±0.005</span></td>
+                  <td>-7.282 <span class="sd">±0.308</span></td>
+                  <td>2.687 <span class="sd">±0.152</span></td>
+                  <td class="primary">67.9 <span class="sd">±0.432</span></td>
+                  <td>79.9 <span class="sd">±0.945</span></td>
+                  <td>85.1 <span class="sd">±1.399</span></td>
+                  <td class="primary">0.185 <span class="sd">±0.001</span></td>
+                  <td>21.591 <span class="sd">±0.367</span></td>
+                  <td>0.991 <span class="sd">±0.000</span></td>
+                </tr>
+          
+                <tr>
+                  <td>MiMiC</td>
+                  <td class="primary">49.5 <span class="sd">±0.010</span></td>
+                  <td>-7.425 <span class="sd">±0.265</span></td>
+                  <td>2.721 <span class="sd">±0.283</span></td>
+                  <td class="primary">65.3 <span class="sd">±0.980</span></td>
+                  <td><strong>83.3 <span class="sd">±0.611</span></strong></td>
+                  <td>78.5 <span class="sd">±0.608</span></td>
+                  <td class="primary">0.176 <span class="sd">±0.004</span></td>
+                  <td>21.227 <span class="sd">±0.375</span></td>
+                  <td>0.991 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>HPR</td>
+                  <td class="primary">48.9 <span class="sd">±0.033</span></td>
+                  <td>-7.772 <span class="sd">±0.211</span></td>
+                  <td>2.446 <span class="sd">±0.239</span></td>
+                  <td class="primary">65.6 <span class="sd">±0.588</span></td>
+                  <td>77.9 <span class="sd">±1.561</span></td>
+                  <td>84.33 <span class="sd">±1.509</span></td>
+                  <td class="primary">0.163 <span class="sd">±0.003</span></td>
+                  <td>28.507 <span class="sd">±1.086</span></td>
+                  <td>0.991 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>RE-Control</td>
+                  <td class="primary"><u>51.5 <span class="sd">±0.014</span></u></td>
+                  <td>-7.225 <span class="sd">±0.278</span></td>
+                  <td>3.271 <span class="sd">±0.272</span></td>
+                  <td class="primary">65.7 <span class="sd">±0.446</span></td>
+                  <td>77.5 <span class="sd">±1.628</span></td>
+                  <td>84.8 <span class="sd">±1.273</span></td>
+                  <td class="primary"><u>0.156 <span class="sd">±0.007</span></u></td>
+                  <td>20.375 <span class="sd">±0.677</span></td>
+                  <td>0.988 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>Linear-AcT</td>
+                  <td class="primary">50.6 <span class="sd">±0.018</span></td>
+                  <td>-7.206 <span class="sd">±0.401</span></td>
+                  <td>2.695 <span class="sd">±0.200</span></td>
+                  <td class="primary">68.1 <span class="sd">±0.941</span></td>
+                  <td>78.7 <span class="sd">±0.436</span></td>
+                  <td>86.50 <span class="sd">±1.549</span></td>
+                  <td class="primary">0.180 <span class="sd">±0.003</span></td>
+                  <td>21.619 <span class="sd">±0.654</span></td>
+                  <td>0.993 <span class="sd">±0.001</span></td>
+                </tr>
+          
+                <tr>
+                  <td>TruthFlow</td>
+                  <td class="primary">51.4 <span class="sd">±0.012</span></td>
+                  <td><u>-6.972 <span class="sd">±0.272</span></u></td>
+                  <td><u>3.421 <span class="sd">±0.479</span></u></td>
+                  <td class="primary"><u>68.6 <span class="sd">±0.766</span></u></td>
+                  <td>79.6 <span class="sd">±1.600</span></td>
+                  <td>86.1 <span class="sd">±1.934</span></td>
+                  <td class="primary">0.194 <span class="sd">±0.004</span></td>
+                  <td>37.796 <span class="sd">±0.785</span></td>
+                  <td>0.977 <span class="sd">±0.003</span></td>
+                </tr>
+          
+                <tr class="ours">
+                  <td>Ours</td>
+                  <td class="primary"><strong>54.5 <span class="sd">±0.010</span></strong></td>
+                  <td><strong>-6.528 <span class="sd">±0.203</span></strong></td>
+                  <td><strong>3.690 <span class="sd">±0.460</span></strong></td>
+                  <td class="primary"><strong>70.7 <span class="sd">±1.038</span></strong></td>
+                  <td><u>81.6 <span class="sd">±0.680</span></u></td>
+                  <td>86.6 <span class="sd">±1.473</span></td>
+                  <td class="primary"><strong>0.121 <span class="sd">±0.003</span></strong></td>
+                  <td>22.691 <span class="sd">±0.877</span></td>
+                  <td>0.992 <span class="sd">±0.002</span></td>
+                </tr>
+              </tbody>
+            </table>
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+</section>
+
+<style>
+  td.model {
+    padding: 0;                 /* avoid clipping */
+    width: 36px;                /* narrow column */
+    text-align: center;
+    vertical-align: middle !important;  /* center across the full span */
+    background: #fff;
+  }
+
+  td.model .vlabel {
+    display: inline-block;
+    line-height: 1;
+    white-space: nowrap;
+    font-weight: 700;
+    color: #374151;
+    transform: rotate(-90deg);          /* robust across browsers */
+    transform-origin: 50% 50%;
+  }
+  .table-wrap { overflow-x: auto; }
+  table.metrics {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.95rem;
+  }
+  caption {
+    text-align: left;
+    padding-bottom: 0.75rem;
+    font-size: 0.95rem;
+    color: #374151;
+  }
+  table.metrics th,
+  table.metrics td {
+    text-align: center;        /* horizontal */
+    vertical-align: middle;    /* vertical   */
+  }
+  thead th {
+    position: sticky; top: 0;
+    background: #f3f4f6;
+    border-bottom: 1px solid #e5e7eb;
+    font-weight: 700;
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    white-space: nowrap;
+  }
+  .subhead th {
+    background: #fafafa;
+    font-weight: 600;
+    color: #4b5563;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  td, tbody th {
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+  }
+  td .sd { opacity: 0.7; font-size: 0.88em; }
+  td.primary, th.primary { background: #e6f0ff; } /* light blue for primary metrics */
+  tbody .model {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    text-align: center;
+    font-weight: 700;
+    color: #374151;
+    background: #fff;
+  }
+  tbody tr.ours td:first-child { font-weight: 700; }
+  .foot { margin-top: 0.4rem; font-size: 0.85rem; color: #6b7280; }
+  /* row group separation (visual analog to \midrule[1pt]) */
+  tbody + tbody tr:first-child td,
+  tbody + tbody tr:first-child .model {
+    border-top: 2px solid #e5e7eb;
+  }
+
+  .abstract-content {
+    max-width: 900px;
+    margin: 1rem auto 3rem auto;
+    background-color: white;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    line-height: 1.8;
+    font-size: 1.05rem;
+    color: #333;
+    text-align: justify;
+    transition: all 0.3s ease;
+  }
+
+  .abstract-content:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+  }
+
+  .abstract-content p {
+    margin-bottom: 1.2rem;
+  }
+
+  .abstract-content p:last-child {
+    margin-bottom: 0;
+  }
+
+  .abstract-content em {
+    font-style: italic;
+    color: #555;
+  }
+
+  .abstract-content strong {
+    font-weight: 600;
+    color: #2a2f6c;
+  }
+
+  .diagram-card {
+    max-width: 900px;
+    margin: 1rem auto 0 auto;
+    background-color: white;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+  }
+
+  .diagram-card:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+  }
+
+  .algorithm-main-image {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 3rem;
+  }
+
+  .main-algorithm-img {
+    max-width: 100%;
+    width: 1000px;
+    height: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  .image-caption {
+    max-width: 800px;
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 1rem;
+    color: #555;
+    line-height: 1.6;
+  }
+
+  .algorithm-components {
+    margin-bottom: 3rem;
+  }
+
+  .components-title {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: #2a2f6c;
+    font-size: 1.5rem;
+  }
+
+  .component-card {
+    background-color: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 1.2rem;
+    transition: all 0.3s ease;
+  }
+
+  .component-card:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    transform: translateY(-5px);
+  }
+
+  .component-header {
+    background-color: #2a2f6c;
+    color: white;
+    padding: 1.2rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .component-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  .expand-icon {
+    font-size: 1.5rem;
+    font-weight: bold;
+    transition: transform 0.3s ease;
+  }
+
+  .component-content {
+    padding: 1.5rem;
+    display: none;
+    line-height: 1.6;
+  }
+
+  .component-content.active {
+    display: block;
+    animation: fadeIn 0.5s ease;
+  }
+
+  .component-content p {
+    margin-bottom: 0.5rem;
+  }
+
+  /* Formula highlighting */
+  .formula-highlight {
+    padding: 0.3em 0;
+    margin: 0.3em 0;
+    text-align: center;
+  }
+
+  /* Conclusion highlight box */
+  .conclusion-highlight {
+    background: linear-gradient(135deg, #e6f0ff 0%, #ffffff 100%);
+    padding: 0.8rem 1.2rem;
+    border-radius: 8px;
+    margin-top: 0.5rem;
+    text-align: center;
+    border-left: 4px solid #2f3b7a;
+  }
+
+  /* Method list styling */
+  .method-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+
+  .method-list li {
+    padding: 0.3rem 0;
+    padding-left: 1.5rem;
+    position: relative;
+  }
+
+  .method-list li:before {
+    content: "▸";
+    position: absolute;
+    left: 0;
+    color: #4a5ba8;
+    font-weight: bold;
+  }
+
+  /* Advantages section special styling */
+  .advantages-content {
+    background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 100%);
+  }
+
+  .advantages-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+
+  .advantages-list li {
+    padding: 0.8rem 1.2rem;
+    margin-bottom: 0.6rem;
+    background: white;
+    border-radius: 8px;
+    border-left: 4px solid #4a5ba8;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Group 1: Unified ODE-Based Steering Framework */
+  .mdp-card .component-header {
+    background-color: #2f3b7a; /* Group 1-1: Darkest */
+  }
+
+  .starpo-card .component-header {
+    background-color: #3f4d91; /* Group 1-2: Medium */
+  }
+
+  /* Group 2: ODESteer */
+  #barrier-card .component-header {
+    background-color: #4a5ba8; /* Group 2-1: Lighter than Group 1-2 */
+  }
+
+  #ode-card .component-header {
+    background-color: #5d6ec4; /* Group 2-2: Medium */
+  }
+
+  #advantages-card .component-header {
+    background-color: #7080d9; /* Group 2-3: Lightest */
+  }
+
+  /* Group 3: Experiments */
+  #experiments-card .component-header {
+    background-color: #7d8ee6; /* Group 3-1: Lighter than Group 2-3 */
+  }
+
+  .interactive-mdp-viz {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 2rem 0;
+    gap: 0.5rem;
+  }
+
+  .mdp-state {
+    background-color: #f0f2f5;
+    border: 2px solid #2a2f6c;
+    border-radius: 8px;
+    padding: 1rem;
+    width: 150px;
+    text-align: center;
+    transition: all 0.3s ease;
+  }
+
+  .mdp-state:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .state-label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    color: #2a2f6c;
+  }
+
+  .state-tokens {
+    font-family: monospace;
+    padding: 0.5rem;
+    background-color: #e6e8eb;
+    border-radius: 4px;
+  }
+
+  .mdp-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0 0.5rem;
+  }
+
+  .action-label {
+    font-weight: bold;
+    color: #2a2f6c;
+    margin-top: 0.25rem;
+  }
+
+  .starpo-phases {
+    margin-top: 2rem;
+  }
+
+  .phase-card {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-left: 4px solid #4a3f9f;
+  }
+
+  .phase-card h4 {
+    color: #2a2f6c;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+  }
+
+  .phase-content {
+    padding-left: 1rem;
+  }
+
+  .code-snippet {
+    background-color: #1e1e3f;
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+  }
+
+  .code-snippet code {
+    color: #e7e7e7;
+    font-family: monospace;
+  }
+
+  .interactive-rollout {
+    margin: 2rem 0;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 1.5rem;
+    background-color: #fff;
+  }
+
+  .rollout-step {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid #e5e7eb; /* light gray */
+    border-radius: 12px;
+  }
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.95rem;
+  }
+  th, td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: #f3f4f6; /* header bg */
+    font-weight: 700;
+    text-align: left;
+  }
+  tbody th[scope="rowgroup"],
+  tbody th[scope="row"] {
+    font-weight: 700;
+    white-space: nowrap;
+    background: #fff;
+  }
+  tbody tr:last-child > * {
+    border-bottom: 0;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+
+
+  .agent-box, .env-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .agent-icon, .env-icon {
+    font-size: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: #f0f2f5;
+    flex-shrink: 0;
+  }
+
+  .agent-bubble, .env-bubble {
+    background-color: #f0f2f5;
+    border-radius: 12px;
+    padding: 1rem;
+    position: relative;
+    max-width: 80%;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+
+  .agent-bubble:before, .env-bubble:before {
+    content: '';
+    position: absolute;
+    top: 15px;
+    left: -10px;
+    width: 0;
+    height: 0;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    border-right: 10px solid #f0f2f5;
+  }
+
+  .agent-bubble.thinking {
+    background-color: #e6f3ff;
+    border-left: 3px solid #2a2f6c;
+  }
+
+  .agent-bubble.thinking:before {
+    border-right-color: #e6f3ff;
+  }
+
+  .agent-bubble.action {
+    background-color: #e9f7ef;
+    border-left: 3px solid #27ae60;
+    margin-top: 0.5rem;
+  }
+
+  .agent-bubble.action:before {
+    border-right-color: #e9f7ef;
+  }
+
+  .env-bubble.feedback {
+    background-color: #fef5e7;
+    border-left: 3px solid #f39c12;
+  }
+
+  .env-bubble.feedback:before {
+    border-right-color: #fef5e7;
+  }
+
+  .replay-button {
+    background-color: #2a2f6c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    margin-top: 1rem;
+  }
+
+  .replay-button:hover {
+    background-color: #4a3f9f;
+  }
+
+  .optimization-strategies {
+    margin: 1.5rem 0;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .strategies-title {
+    margin: 0;
+    padding: 1rem 1.5rem;
+    background-color: #f0f2f5;
+    border-bottom: 1px solid #ddd;
+    color: #2a2f6c;
+    font-size: 1.1rem;
+  }
+
+  .strategy-tabs {
+    display: flex;
+    background-color: #f0f2f5;
+    border-bottom: 1px solid #ddd;
+  }
+
+  .strategy-tab {
+    padding: 0.75rem 1.5rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .strategy-tab:hover {
+    background-color: #e6e8eb;
+  }
+
+  .strategy-tab.active {
+    background-color: #2a2f6c;
+    color: white;
+    font-weight: bold;
+  }
+
+  .strategy-content {
+    padding: 1.5rem;
+    background-color: #fff;
+  }
+
+  .strategy-details {
+    display: none;
+  }
+
+  .strategy-details.active {
+    display: block;
+    animation: fadeIn 0.5s ease;
+  }
+
+  .formula {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    margin: 1rem 0;
+    min-height: 50px;
+  }
+
+  .conclusion-text {
+    font-weight: 600;
+    margin-top: 1.5rem;
+    color: #2a2f6c;
+  }
+
+  .algorithm-visualization {
+    margin: 1rem 0 3rem 0;
+    position: relative;
+    padding-bottom: 1rem;
+  }
+  
+  .algorithm-visualization h3 {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: #2a2f6c;
+  }
+  
+  .visual-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 2rem;
+    background-color: #f8f9fa;
+    border-radius: 12px;
+    position: relative;
+    margin-bottom: 3rem;
+  }
+  
+  .flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: white;
+    border-radius: 8px;
+    padding: 1.2rem;
+    width: 120px;
+    height: 120px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 2;
+  }
+
+  .flow-step:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  }
+
+  .step-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .step-content {
+    text-align: center;
+    width: 100%;
+  }
+
+  .step-content h4 {
+    margin: 0;
+    color: #2a2f6c;
+    font-size: 1.1rem;
+  }
+
+  .flow-arrow-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .flow-arrow {
+    flex-shrink: 0;
+    z-index: 1;
+  }
+
+  .flow-step.active {
+    border: 2px solid #2a2f6c;
+    background-color: #f0f8ff;
+  }
+
+  /* New repeat arrow styling */
+  .repeat-arrow-container {
+    position: absolute;
+    width: 100%;
+    height: 70px;
+    bottom: -40px;
+    left: 0;
+    overflow: visible;
+  }
+
+  .repeat-arrow {
+    width: 100%;
+    height: 50px;
+    overflow: visible;
+  }
+
+  .math-var {
+    font-family: inherit;
+  }
+  
+  .state-label, .action-label {
+    font-weight: bold;
+    color: #2a2f6c;
+  }
+  
+  .math-formula {
+    font-family: 'Times New Roman', serif;
+    font-size: 1.2rem;
+    line-height: 1.5;
+    display: block;
+    text-align: center;
+    letter-spacing: 0.02em;
+    padding: 0.8rem;
+  }
+  
+  .math-formula sub,
+  .math-var sub {
+    font-size: 0.75em;
+    position: relative;
+    bottom: -0.25em;
+    line-height: 0;
+  }
+  
+  .math-formula sup,
+  .math-var sup {
+    font-size: 0.75em;
+    position: relative;
+    top: -0.5em;
+    line-height: 0;
+  }
+
+  @media (max-width: 768px) {
+    .interactive-mdp-viz {
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .mdp-arrow {
+      transform: rotate(90deg);
+      margin: 1rem 0;
+    }
+
+    .visual-container {
+      flex-direction: column;
+      padding: 2rem 1rem;
+    }
+
+    .flow-arrow-wrapper {
+      transform: rotate(90deg);
+      margin: 0.5rem 0;
+    }
+
+    .repeat-arrow-container {
+      display: none; /* Hide on mobile */
+    }
+  }
+
+  @media (min-width: 768px) and (max-width: 1024px) {
+    .main-algorithm-img {
+      width: 90%;
+    }
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Component expansion functionality - handle all collapsible cards
+    const componentCards = document.querySelectorAll('.component-card');
+
+    componentCards.forEach(card => {
+      const header = card.querySelector('.component-header');
+      const content = card.querySelector('.component-content');
+      const expandIcon = card.querySelector('.expand-icon') as HTMLElement | null;
+
+      if (header && content && expandIcon) {
+        header.addEventListener('click', (e: Event) => {
+          const target = e.target as HTMLElement;
+          // Prevent toggling when clicking inside content
+          if (target.closest && target.closest('.component-content')) return;
+
+          content.classList.toggle('active');
+          if (content.classList.contains('active')) {
+            expandIcon.textContent = '-';
+          } else {
+            expandIcon.textContent = '+';
+          }
+        });
+      }
+    });
+
+    // Strategy tab switching
+    const ppoTab = document.getElementById('ppo-tab');
+    const grpoTab = document.getElementById('grpo-tab');
+    const ppoContent = document.getElementById('ppo-content');
+    const grpoContent = document.getElementById('grpo-content');
+
+    if (ppoTab && grpoTab && ppoContent && grpoContent) {
+      ppoTab.addEventListener('click', () => {
+        ppoTab.classList.add('active');
+        grpoTab.classList.remove('active');
+        ppoContent.classList.add('active');
+        grpoContent.classList.remove('active');
+      });
+
+      grpoTab.addEventListener('click', () => {
+        grpoTab.classList.add('active');
+        ppoTab.classList.remove('active');
+        grpoContent.classList.add('active');
+        ppoContent.classList.remove('active');
+      });
+    }
+
+    // Rollout animation
+    const replayRollout = document.getElementById('replay-rollout');
+    const agentThinking = document.getElementById('agent-thinking') as HTMLElement | null;
+    const agentAction = document.getElementById('agent-action') as HTMLElement | null;
+    const envFeedback = document.getElementById('env-feedback') as HTMLElement | null;
+
+    function animateRollout() {
+      // Reset
+      if (agentThinking) agentThinking.style.opacity = '0';
+      if (agentAction) agentAction.style.opacity = '0';
+      if (envFeedback) envFeedback.style.opacity = '0';
+      
+      // Animate thinking
+      setTimeout(() => {
+        if (agentThinking) {
+          agentThinking.style.opacity = '1';
+          agentThinking.style.transform = 'translateY(0)';
+        }
+      }, 500);
+      
+      // Animate action
+      setTimeout(() => {
+        if (agentAction) {
+          agentAction.style.opacity = '1';
+          agentAction.style.transform = 'translateY(0)';
+        }
+      }, 2000);
+      
+      // Animate feedback
+      setTimeout(() => {
+        if (envFeedback) {
+          envFeedback.style.opacity = '1';
+          envFeedback.style.transform = 'translateY(0)';
+        }
+      }, 3500);
+    }
+
+    if (replayRollout) {
+      replayRollout.addEventListener('click', animateRollout);
+      
+      // Run animation on load
+      setTimeout(animateRollout, 1000);
+    }
+
+    // Interactive algorithm flow
+    const flowSteps = document.querySelectorAll('.flow-step');
+    let currentStepIndex = 0;
+
+    function highlightNextStep() {
+      // Reset all steps
+      flowSteps.forEach(step => step.classList.remove('active'));
+      
+      // Highlight current step
+      if (flowSteps[currentStepIndex]) {
+        flowSteps[currentStepIndex].classList.add('active');
+      }
+      
+      // Move to next step
+      currentStepIndex = (currentStepIndex + 1) % flowSteps.length;
+    }
+
+    // Highlight steps every 2 seconds
+    if (flowSteps.length > 0) {
+      highlightNextStep(); // Highlight first step immediately
+      setInterval(highlightNextStep, 2000);
+    }
+  });
+</script> 
