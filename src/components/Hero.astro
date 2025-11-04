@@ -10,7 +10,7 @@
   <p class="subtitle animated-subtitle-line" id="animated-subtitle-line2">LLM Alignment</p>
   <p class="description">
     <span class="desc-light">Interpreting Activation Steering as</span> <strong class="desc-dark">ODE Dynamics</strong><br>
-    <span class="desc-light">Guided by</span> <strong class="desc-dark">Barrier Functions</strong> <span class="desc-light">to Steer Directions <em>Adaptively</em></span>
+    <span class="desc-light">Guided by</span> <strong class="desc-dark">Barrier Functions</strong> <span class="desc-light">to Steer Directions</span> <em class="adaptively-text">Adaptively</em>
   <br>
   <!-- <a href="https://vagen-ai.github.io/" class="vagen-announcement">
     Announcing <b>VAGEN</b> for VLM Agents >
@@ -100,5 +100,51 @@
   .vagen-announcement:hover {
     color: #4b4f8f;
     text-decoration: none;
+  }
+
+  .adaptively-text {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 600;
+    font-style: italic;
+    font-size: 1.05em;
+    animation: adaptiveGlow 3s ease-in-out infinite;
+    display: inline-block;
+    position: relative;
+  }
+
+  @keyframes adaptiveGlow {
+    0%, 100% {
+      filter: brightness(1);
+      transform: scale(1);
+    }
+    50% {
+      filter: brightness(1.2);
+      transform: scale(1.02);
+    }
+  }
+
+  .adaptively-text::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #667eea, #764ba2, transparent);
+    animation: slideUnderline 2s ease-in-out infinite;
+  }
+
+  @keyframes slideUnderline {
+    0%, 100% {
+      opacity: 0.3;
+      transform: translateX(-10%);
+    }
+    50% {
+      opacity: 0.8;
+      transform: translateX(10%);
+    }
   }
 </style> 
