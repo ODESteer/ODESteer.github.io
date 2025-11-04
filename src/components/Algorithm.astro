@@ -140,7 +140,7 @@ const mathFormulas = {
       <div class="component-card mdp-card" id="mdp-card">
         <div class="component-header">
           <h3 class="component-title">Activation Addition as Euler Discretization of ODEs</h3>
-          <div class="expand-icon">+</div>
+          <div class="expand-icon">-</div>
         </div>
         <!-- <div class="component-content" id="mdp-content">
           <p>
@@ -164,7 +164,7 @@ const mathFormulas = {
             </li>
           </p>
         </div> -->
-        <div class="component-content" id="mdp-content">
+        <div class="component-content active" id="mdp-content">
           <p>
             Regular activation addition
             <div class="formula-highlight" set:html={mathFormulas.activationAddition}></div>
@@ -180,9 +180,9 @@ const mathFormulas = {
       <div class="component-card starpo-card" id="starpo-card">
         <div class="component-header">
           <h3 class="component-title">Barrier Functions for Identifying Steering Directions</h3>
-          <div class="expand-icon">+</div>
+          <div class="expand-icon">-</div>
         </div>
-        <div class="component-content" id="starpo-content">
+        <div class="component-content active" id="starpo-content">
           <p>
             Barrier functions guide activations to <strong>move toward and stay within a desired region</strong>.
             For <span set:html={mathFormulas.inlineode}></span>, if
@@ -237,9 +237,9 @@ const mathFormulas = {
       <div class="component-card starpo-card" id="barrier-card">
         <div class="component-header">
           <h3 class="component-title">Defining Barrier Function</h3>
-          <div class="expand-icon">+</div>
+          <div class="expand-icon">-</div>
         </div>
-        <div class="component-content" id="barrier-content">
+        <div class="component-content active" id="barrier-content">
           <p>
             We define
             <div class="formula-highlight" set:html={mathFormulas.ourBarrierFunction}></div>
@@ -257,9 +257,9 @@ const mathFormulas = {
       <div class="component-card starpo-card" id="ode-card">
         <div class="component-header">
           <h3 class="component-title">Constructing the Steering ODE</h3>
-          <div class="expand-icon">+</div>
+          <div class="expand-icon">-</div>
         </div>
-        <div class="component-content" id="ode-content">
+        <div class="component-content active" id="ode-content">
           <p>
             To satisfy the barrier condition, we define
             <div class="formula-highlight" set:html={mathFormulas.ourODE}></div>
@@ -277,9 +277,9 @@ const mathFormulas = {
       <div class="component-card starpo-card" id="advantages-card">
         <div class="component-header">
           <h3 class="component-title">Key Advantages</h3>
-          <div class="expand-icon">+</div>
+          <div class="expand-icon">-</div>
         </div>
-        <div class="component-content advantages-content" id="advantages-content">
+        <div class="component-content advantages-content active" id="advantages-content">
           <ul class="advantages-list">
             <li>
               <strong>Feedback Control:</strong> The barrier function's gradient depends on current activation, enabling adaptive steering.
@@ -298,9 +298,9 @@ const mathFormulas = {
       <div class="component-card starpo-card" id="experiments-card">
         <div class="component-header">
           <h3 class="component-title">Experimental Results across Multiple LLMs and Benchmarks</h3>
-          <div class="expand-icon">+</div>
+          <div class="expand-icon">-</div>
         </div>
-        <div class="component-content" id="experiments-content">
+        <div class="component-content active" id="experiments-content">
           <div class="table-wrap">
             <table class="metrics">
           
