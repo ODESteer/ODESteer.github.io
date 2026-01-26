@@ -72,7 +72,7 @@
 .citation-block pre {
   margin: 0;
   white-space: pre;
-  word-wrap: auto;
+  overflow-x: auto;
   font-family: 'Courier New', Courier, monospace;
   font-size: 0.9rem;
   line-height: 1.5;
